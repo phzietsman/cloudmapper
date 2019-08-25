@@ -1,3 +1,6 @@
+import io
+import sys
+
 import os.path
 import os
 import glob
@@ -480,10 +483,17 @@ def run(arguments):
         dest="account_name",
     )
     parser.add_argument(
+        "--get-all",
+        help="Get all accounts in config.json, overrides --profile and --account",
+        required=False,
+        type=str,
+        dest="get_all"
+    )
+    parser.add_argument(
         "--profile",
         help="AWS profile name",
         required=False,
-        type=str,
+        type=bool,
         dest="profile_name",
     )
     parser.add_argument(
@@ -494,17 +504,48 @@ def run(arguments):
 
     args = parser.parse_args(arguments)
 
-    if not args.account_name:
-        try:
-            config = json.load(open(args.config))
-        except IOError:
-            exit('ERROR: Unable to load config file "{}"'.format(args.config))
-        except ValueError as e:
-            exit(
-                'ERROR: Config file "{}" could not be loaded ({}), see config.json.demo for an example'.format(
-                    args.config, e
-                )
+    try:
+        config = json.load(open(args.config))
+    except IOError:
+        exit('ERROR: Unable to load config file "{}"'.format(args.config))
+    except ValueError as e:
+        exit(
+            'ERROR: Config file "{}" could not be loaded ({}), see config.json.demo for an example'.format(
+                args.config, e
             )
-        args.account_name = get_account(args.account_name, config, args.config)["name"]
+        )
 
-    collect(args)
+    if args.get_all == "True":
+        failed_accounts = []
+        print("\U0001F606 Lets do a lot!")
+
+        # create a text trap and redirect stdout
+        text_trap = io.StringIO()       
+
+        for account in config["accounts"]:
+            # restore stdout function
+            sys.stdout = sys.__stdout__
+            print("Mapping : " + account["name"])
+
+            # redirect stdout
+            sys.stdout = text_trap
+
+            try :
+                args.account_name = account["name"]
+                args.profile_name = account["name"]
+
+                collect(args)
+            except:
+                failed_accounts.append(account["name"]) 
+        
+        sys.stdout = sys.__stdout__
+
+        print("\U0001F635 Failed Accounts: ") 
+        print(*failed_accounts, sep = ", ")  
+    else: 
+        if not args.account_name:
+            args.account_name = get_account(args.account_name, config, args.config)["name"]
+        
+        collect(args)
+    
+
